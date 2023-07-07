@@ -103,21 +103,32 @@ for epoch in range(nEpochs):
 
         ### Train discriminator : max log(D(realImages)) + log(1- D( G(z) ))
         noise = torch.rand(batchSize, zDimention).to(device)    # rand noise tens
-        fake_image = generator(noise)                       # G(z)
+        fakeImage = generator(noise)                       # G(z)
 
         discriminatorReal = discriminator(realImages).view(-1)    # D(realImage)
         lossDiscriminatorReal = criterion(discriminatorReal,
                                           torch.ones_like(discriminatorReal))
 
-        discriminatorFake = discriminator(fake).view(-1)          # D( G(z) )
+        discriminatorFake = discriminator(fakeImage).view(-1)     # D( G(z) )
         lossDiscriminatorFake = criterion(discriminatorFake,
                                           torch.zeros_like(discriminatorFake))
 
         lossDiscriminator = (lossDiscriminatorReal + lossDiscriminatorFake)/2
 
         discriminator.zero_grad()
-        lossDiscriminator.backward()
+        lossDiscriminator.backward(retain_graph=True)
         optimiserDiscriminator.step()
 
 
-        ### Train Generator
+        ### Train Generator : min log( 1- D( G(z) ) <--> max log(D( G(0) )
+        ### This is the similar operation as doen for sicriminator, hence we 
+        ### want to retain the fakeImage calculations, hense the retain_grahs
+        output = discriminator(fakeImage).view(-1)       # D( G(z) )
+        lossGenerator = criterion(output, torch.ones_like(output)) 
+
+        generator.zero_grad()
+        lossGenerator.backward()
+        optimiserGenerator.step()
+
+
+        ### Visualise training on tensorboard
