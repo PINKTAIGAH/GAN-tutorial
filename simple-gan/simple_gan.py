@@ -62,8 +62,8 @@ loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 opt_disc = optim.Adam(disc.parameters(), lr=lr)
 opt_gen = optim.Adam(gen.parameters(), lr=lr)
 criterion = nn.BCELoss()
-writer_fake = SummaryWriter(f"logs/fake")
-writer_real = SummaryWriter(f"logs/real")
+writer_fake = SummaryWriter(f"runs/fake")
+writer_real = SummaryWriter(f"runs/real")
 step = 0
 
 for epoch in range(num_epochs):
@@ -94,7 +94,7 @@ for epoch in range(num_epochs):
 
         if batch_idx == 0:
             print(
-                f"Epoch [{epoch}/{num_epochs}] Batch {batch_idx}/{len(loader)} \
+                f"Epoch [{epoch}/{num_epochs}]  \
                       Loss D: {lossD:.4f}, loss G: {lossG:.4f}"
             )
 
@@ -111,3 +111,6 @@ for epoch in range(num_epochs):
                     "Mnist Real Images", img_grid_real, global_step=step
                 )
                 step += 1
+
+writer_real.close()
+writer_fake.close()
