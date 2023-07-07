@@ -1,7 +1,6 @@
 """
 In this model we will use the MNIST data to 
 """
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,126 +8,106 @@ import torchvision
 import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter  
 
-"""
-We first define the class for our Discriminaor. This usially takes the form of
-what a regular NN model for the tak we want to be. In this case it is a simple
-fully connected feedforward network
-"""
 
-class Discriminaor(nn.Module):
-    def __init__(self, imageDimention):        # input features size will be 784
+class Discriminator(nn.Module):
+    def __init__(self, in_features):
         super().__init__()
-        self.discriminaor = nn.Sequential(
-            nn.Linear(imageDimention, 128),
-            nn.LeakyReLU(0.1),              # 0.1 is an arbitrary hyperparam
-            nn.Linear(128, 1),              
-            ### This network is binary so 1 output --> Real or fake
-
-            nn.Sigmoid(),                   # So we get probabilities as output
+        self.disc = nn.Sequential(
+            nn.Linear(in_features, 128),
+            nn.LeakyReLU(0.01),
+            nn.Linear(128, 1),
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
-        return self.discriminaor(x)
+        return self.disc(x)
 
-"""
-We now look to define our Generator that will be tasked with generating 
-imitations of the input data. This will take random nouse and use it to generate
-an image of the same dimentions and the dataset we are using
-"""
 
 class Generator(nn.Module):
-    def __init__(self, zDimention, imageDimention):
-        # zDimiention is the dimention of the latent noise the generator uses
-        # to make randomized datasets
-
+    def __init__(self, z_dim, img_dim):
         super().__init__()
-
-        self.generator = nn.Sequential(
-            nn.Linear(zDimention, 256),
-            nn.LeakyReLU(0.1),
-            nn.LeakyReLU(256, imageDimention),
-            nn.Tanh(),                  # make output pixel val between -1 and 1
+        self.gen = nn.Sequential(
+            nn.Linear(z_dim, 256),
+            nn.LeakyReLU(0.01),
+            nn.Linear(256, img_dim),
+            nn.Tanh(),  # normalize inputs to [-1, 1] so make outputs [-1, 1]
         )
 
-        def forward(self, x):
-            return self.generator(x)
+    def forward(self, x):
+        return self.gen(x)
 
 
-"""
-We now define our hyperparameters
-We note that simple GAN's are very sensitive to hyperparameter values 
-"""
+# Hyperparameters etc.
+device = "cuda" if torch.cuda.is_available() else "cpu"
+lr = 3e-4
+z_dim = 64
+image_dim = 28 * 28 * 1  # 784
+batch_size = 32
+num_epochs = 50
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-learningRate = 3e-4     # Best learning rate for adam
-zDimention = 64        # Can also try 128 or 256 (multiples of img dims)
-imageDimentions = 28*28*1   # 28*28*1 channel
-batchSize = 32
-nEpochs = 50
+disc = Discriminator(image_dim).to(device)
+gen = Generator(z_dim, image_dim).to(device)
+fixed_noise = torch.randn((batch_size, z_dim)).to(device)
+transforms = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),
+    ]
+)
 
-"""
-We can now define the model functions
-"""
-
-discriminator = Discriminaor(imageDimentions).to(device)
-generator = Generator(zDimention, imageDimentions).to(device)
-fixedNoise = torch.randn((batchSize, zDimention)).to(device)
-transformation = transforms.Compose(
-    [transforms.ToTensor, transforms.Normalize((0.1307,), (0.3081,))]
-)   
-
-dataset = datasets.MNIST(root="dataset/", transform = transformation,
-                             download=True)
-loader = DataLoader(dataset, batch_size=batchSize, shuffle=True)
-optimiserGenerator = optim.Adam(generator.parameters(), lr=learningRate)
-optimiserDiscriminator = optim.Adam(discriminator.parameters(), lr=learningRate)
+dataset = datasets.MNIST(root="dataset/", transform=transforms, download=True)
+loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+opt_disc = optim.Adam(disc.parameters(), lr=lr)
+opt_gen = optim.Adam(gen.parameters(), lr=lr)
 criterion = nn.BCELoss()
-
-
-### For Tensor board
-writerFake = SummaryWriter(f"runs/GAN_MNIST/fake") # output fake images
-writerReal = SummaryWriter(f"runs/GAN_MNIST/real")
+writer_fake = SummaryWriter(f"logs/fake")
+writer_real = SummaryWriter(f"logs/real")
 step = 0
 
-"""
-We now write the model training loop
-"""
+for epoch in range(num_epochs):
+    for batch_idx, (real, _) in enumerate(loader):
+        real = real.view(-1, 784).to(device)
+        batch_size = real.shape[0]
 
-for epoch in range(nEpochs):
-    for batchIdx, (realImages, _) in enumerate(loader):
-        realImages = realImages.view(-1, 28*28).to       # resize images
-        batchSize = realImages.shape[0]
+        ### Train Discriminator: max log(D(x)) + log(1 - D(G(z)))
+        noise = torch.randn(batch_size, z_dim).to(device)
+        fake = gen(noise)
+        disc_real = disc(real).view(-1)
+        lossD_real = criterion(disc_real, torch.ones_like(disc_real))
+        disc_fake = disc(fake).view(-1)
+        lossD_fake = criterion(disc_fake, torch.zeros_like(disc_fake))
+        lossD = (lossD_real + lossD_fake) / 2
+        disc.zero_grad()
+        lossD.backward(retain_graph=True)
+        opt_disc.step()
 
-        ### Train discriminator : max log(D(realImages)) + log(1- D( G(z) ))
-        noise = torch.rand(batchSize, zDimention).to(device)    # rand noise tens
-        fakeImage = generator(noise)                       # G(z)
+        ### Train Generator: min log(1 - D(G(z))) <-> max log(D(G(z))
+        # where the second option of maximizing doesn't suffer from
+        # saturating gradients
+        output = disc(fake).view(-1)
+        lossG = criterion(output, torch.ones_like(output))
+        gen.zero_grad()
+        lossG.backward()
+        opt_gen.step()
 
-        discriminatorReal = discriminator(realImages).view(-1)    # D(realImage)
-        lossDiscriminatorReal = criterion(discriminatorReal,
-                                          torch.ones_like(discriminatorReal))
+        if batch_idx == 0:
+            print(
+                f"Epoch [{epoch}/{num_epochs}] Batch {batch_idx}/{len(loader)} \
+                      Loss D: {lossD:.4f}, loss G: {lossG:.4f}"
+            )
 
-        discriminatorFake = discriminator(fakeImage).view(-1)     # D( G(z) )
-        lossDiscriminatorFake = criterion(discriminatorFake,
-                                          torch.zeros_like(discriminatorFake))
+            with torch.no_grad():
+                fake = gen(fixed_noise).reshape(-1, 1, 28, 28)
+                data = real.reshape(-1, 1, 28, 28)
+                img_grid_fake = torchvision.utils.make_grid(fake, normalize=True)
+                img_grid_real = torchvision.utils.make_grid(data, normalize=True)
 
-        lossDiscriminator = (lossDiscriminatorReal + lossDiscriminatorFake)/2
-
-        discriminator.zero_grad()
-        lossDiscriminator.backward(retain_graph=True)
-        optimiserDiscriminator.step()
-
-
-        ### Train Generator : min log( 1- D( G(z) ) <--> max log(D( G(0) )
-        ### This is the similar operation as doen for sicriminator, hence we 
-        ### want to retain the fakeImage calculations, hense the retain_grahs
-        output = discriminator(fakeImage).view(-1)       # D( G(z) )
-        lossGenerator = criterion(output, torch.ones_like(output)) 
-
-        generator.zero_grad()
-        lossGenerator.backward()
-        optimiserGenerator.step()
-
-
-        ### Visualise training on tensorboard
+                writer_fake.add_image(
+                    "Mnist Fake Images", img_grid_fake, global_step=step
+                )
+                writer_real.add_image(
+                    "Mnist Real Images", img_grid_real, global_step=step
+                )
+                step += 1
