@@ -54,3 +54,42 @@ class Generator(nn.Module):
 
         def forward(self, x):
             return self.generator(x)
+
+
+"""
+We now define our hyperparameters
+We note that simple GAN's are very sensitive to hyperparameter values 
+"""
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+learningRate = 3e-4     # Best learning rate for adam
+zDimention = 64        # Can also try 128 or 256 (multiples of img dims)
+imageDimentions = 28*28*1   # 28*28*1 channel
+batchSize = 32
+nEpochs = 50
+
+"""
+We can now define the model functions
+"""
+
+discriminator = Discriminaor(imageDimentions).to(device)
+generator = Generator(zDimention, imageDimentions).to(device)
+fixedNoise = torch.randn((batchSize, zDimention)).to(device)
+transformation = transforms.Compose(
+    [transforms.ToTensor, transforms.Normalize((0.1307,), (0.3081,))]
+)   
+
+dataset = datasets.MNIST(root="dataset/", transform = transformation,
+                             download=True)
+loader = DataLoader(dataset, batch_size=batchSize, shuffle=True)
+optimiserGenerator = optim.Adam(generator.parameters(), lr=learningRate)
+optimiserDiscriminator = optim.Adam(discriminator.parameters(), lr=learningRate)
+criterion = nn.BCELoss()
+
+
+# For Tensor board
+writerFake = SummaryWriter(f"runs/GAN_MNIST/fake") # output fake images
+writerReal = SummaryWriter(f"runs/GAN_MNIST/real")
+step = 0
+
+
