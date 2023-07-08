@@ -51,16 +51,16 @@ class Generator(nn.Module):
             ### INPUT SIZE: N * zDimention * 1 * 1
             self._block(zDimention, featuresG*16, 4, 1, 0),
             ### SIZE: 4*4 
-            self._block(featuresG*16, featuresG*8, 4, 1, 0),
+            self._block(featuresG*16, featuresG*8, 4, 2, 1),
             ### SIZE: 8*8
-            self._block(featuresG*8, featuresG*4, 4, 1, 0),
+            self._block(featuresG*8, featuresG*4, 4, 2, 1),
             ### SIZE: 16*16
-            self._block(featuresG*4, featuresG*2, 4, 1, 0),
+            self._block(featuresG*4, featuresG*2, 4, 2, 1),
             ### SIZE: 32*32
             nn.ConvTranspose2d(featuresG*2, channelImages, kernel_size=4,
-                               stride=2, padding=1)
+                               stride=2, padding=1),
             ### SIZE: 64*64
-            nn.nn.Tanh(),   # We want output to be in range [-1, 1]
+            nn.Tanh(),   # We want output to be in range [-1, 1]
         )
 
     def _block(self, inChannels, outChannels, kernalSize, stride, padding):
@@ -70,3 +70,35 @@ class Generator(nn.Module):
             nn.BatchNorm2d(outChannels),
             nn.ReLU(),
         )
+    
+    def forward(self, x):
+        return self.generator(x)
+
+"""
+Initialize weights
+"""
+
+def initialiseWeights(model):
+    ### Setting init weights when doing one of the following operations
+    for m in model.modules():
+        if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.BatchNorm2d)):
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
+
+def testModel():
+    N, inChannels, hight, width = 8, 3, 64, 64  # batch of 8, 3 channels, 64*64
+    zDimention = 100
+    
+    x = torch.randn((N, inChannels, hight, width))
+    z = torch.randn((N, zDimention, 1, 1))
+
+    discriminator = Discriminator(inChannels, 8)
+    generator = Generator(zDimention, inChannels, 8)
+
+    initialiseWeights(discriminator)
+    initialiseWeights(generator)
+
+    assert discriminator(x).shape == (N, 1, 1, 1)  # Check if dims of conv is good
+    assert generator(z).shape == (N, inChannels, hight, width)
+
+if __name__ == "__main__":
+    testModel()
