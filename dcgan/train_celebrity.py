@@ -17,14 +17,14 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LEARNING_RATE = 2e-4
 BATCH_SIZE = 128
 IMAGE_SIZE = 64
-CHANNELS_IMAGE = 1      # 1 for mnist and 3 for RGB
+CHANNELS_IMAGE = 3      # 1 for mnist and 3 for RGB
 Z_DIMENTION = 100
-N_EPOCH = 5
+N_EPOCH = 8 
 FEATURES_DISCRIMINATIOR = 64
 FEATURES_GENERATOR = 64
 
 transforms = transforms.Compose([
-    transforms.Resize(IMAGE_SIZE),
+    transforms.Resize((IMAGE_SIZE,IMAGE_SIZE)),
     transforms.ToTensor(),
     transforms.Normalize(
         [0.5 for _ in range(CHANNELS_IMAGE)],   # generalise for multi channel
@@ -32,8 +32,8 @@ transforms = transforms.Compose([
     ),
 ])
 
-dataset = datasets.MNIST(root="../dataset/", train=True, transform= transforms,
-                         download=True)
+dataset = datasets.ImageFolder(root="/media/giorgio/HDD/GAN/dcgan/celeb_dataset/",
+                              transform=transforms)
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 generator = Generator(Z_DIMENTION, CHANNELS_IMAGE, FEATURES_GENERATOR).to(device)
 discriminator = Discriminator(CHANNELS_IMAGE, FEATURES_DISCRIMINATIOR).to(device)
@@ -49,8 +49,8 @@ optimiserDiscriminator = optim.Adam(discriminator.parameters(), lr=LEARNING_RATE
 criterion = nn.BCELoss()
 fixedNoise = torch.randn(32, Z_DIMENTION, 1, 1).to(device)
 
-writerReal = SummaryWriter(f"runs/real")
-writerFake = SummaryWriter(f"runs/fake")
+writerReal = SummaryWriter(f"runs_celeb/real")
+writerFake = SummaryWriter(f"runs_celeb/fake")
 step = 0
 
 ### Setting the models to training mode
@@ -112,3 +112,6 @@ for epoch in range(N_EPOCH):
                 writerFake.add_image("fake", imageGridFake, global_step=step)
             
                 step += 1
+
+writerReal.close()
+writerFake.close()
