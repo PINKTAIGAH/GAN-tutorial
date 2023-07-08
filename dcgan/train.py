@@ -66,14 +66,15 @@ for epoch in range(N_EPOCH):
     for batchIdx, (realImage, _) in enumerate(loader):
         realImage = realImage.to(device)
         noise = torch.randn((BATCH_SIZE, Z_DIMENTION, 1, 1)).to(device)
+        fakeImage = generator(noise)
         
         ### Training Discriminator  {max log(D(x)) + log(1-D(G(z)))}
         discriminatorReal = discriminator(realImage).reshape(-1)
-        discriminatorFake = discriminator(fake).reshape(-1)
+        discriminatorFake = discriminator(fakeImage).reshape(-1)
 
         lossDiscriminatorReal = criterion(discriminatorReal, 
                                           torch.ones_like(discriminatorReal))
-        lossDiscriminatorFake = criterion(fake,
+        lossDiscriminatorFake = criterion(discriminatorFake,
                                           torch.zeros_like(discriminatorFake))
         lossDiscriminator = (lossDiscriminatorReal + lossDiscriminatorFake)/2 
 
@@ -82,10 +83,28 @@ for epoch in range(N_EPOCH):
         optimiserDiscriminator.step()
 
         ### TRAINing GENERATOR      {max log(D(G(z)))}
-        output = discriminator(fake).reshape(-1)
+        output = discriminator(fakeImage).reshape(-1)
         lossGenerator = criterion(output, torch.ones_like(output))
         
         generator.zero_grad()
         lossGenerator.backward()
         optimiserGenerator.step()
+
+        ### Visualise on tensor board
+        with torch.no_grad():
+            fake = generator(fixedNoise)
+            
+            ### Take out (up to) 32 examples
+            imageGridReal = torchvision.utils.make_grid(
+                realImage[:32], normalize=True
+            )
+            imageGridFake = torchvision.utils.make_grid(
+                fake[:32], normalize=True
+            )
+
+            writerReal.add_image("real", imageGridReal, global_step=step)
+            writerFake.add_image("fake", imageGridFake, global_step=step)
+            
+            step += 1
+
 
