@@ -44,7 +44,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 lr = 3e-4
 z_dim = 64
 image_dim = 28 * 28 * 1  # 784
-batch_size = 32
+batch_size = 64
 num_epochs = 50
 
 disc = Discriminator(image_dim).to(device)
@@ -57,12 +57,12 @@ transforms = transforms.Compose(
     ]
 )
 
-dataset = datasets.MNIST(root="dataset/", transform=transforms, download=True)
+dataset = datasets.MNIST(root="../dataset/", transform=transforms, download=True)
 loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 opt_disc = optim.Adam(disc.parameters(), lr=lr)
 opt_gen = optim.Adam(gen.parameters(), lr=lr)
 criterion = nn.BCELoss()
-writer_fake = SummaryWriter(f"runs/fake")
+writer_fake = SummaryWriter(f"runs/fake_32")
 writer_real = SummaryWriter(f"runs/real")
 step = 0
 
