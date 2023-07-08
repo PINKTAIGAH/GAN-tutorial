@@ -91,20 +91,24 @@ for epoch in range(N_EPOCH):
         optimiserGenerator.step()
 
         ### Visualise on tensor board
-        with torch.no_grad():
-            fake = generator(fixedNoise)
-            
-            ### Take out (up to) 32 examples
-            imageGridReal = torchvision.utils.make_grid(
-                realImage[:32], normalize=True
-            )
-            imageGridFake = torchvision.utils.make_grid(
-                fake[:32], normalize=True
+        if batchIdx % 100 == 0:
+            print(
+                f"Epoch [{epoch}/{N_EPOCH}] Batch {batchIdx}/{len(loader)} \
+                  Loss D: {lossDiscriminator:.4f}, loss G: {lossGenerator:.4f}"
             )
 
-            writerReal.add_image("real", imageGridReal, global_step=step)
-            writerFake.add_image("fake", imageGridFake, global_step=step)
+            with torch.no_grad():
+                fake = generator(fixedNoise)
             
-            step += 1
+                ### Take out (up to) 32 examples
+                imageGridReal = torchvision.utils.make_grid(
+                    realImage[:32], normalize=True
+                )
+                imageGridFake = torchvision.utils.make_grid(
+                    fake[:32], normalize=True
+                )
 
-
+                writerReal.add_image("real", imageGridReal, global_step=step)
+                writerFake.add_image("fake", imageGridFake, global_step=step)
+            
+                step += 1
