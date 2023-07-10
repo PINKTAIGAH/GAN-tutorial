@@ -7,23 +7,23 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
 from model import Generator, Critic, initialiseWeights
-
+from utils import gradientPenalty
 
 """
 Defining hyperparameters
 """
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-LEARNING_RATE = 5e-5 
+LEARNING_RATE = 1e-4 
 BATCH_SIZE = 64
 IMAGE_SIZE = 64
 CHANNELS_IMAGE = 1      # 1 for mnist and 3 for RGB
-Z_DIMENTION = 128
-N_EPOCH = 5 
-FEATURES_CRITIC = 64
-FEATURES_GENERATOR = 64
+Z_DIMENTION = 100
+N_EPOCH = 100
+FEATURES_CRITIC = 16
+FEATURES_GENERATOR = 16
 CRITIC_ITERATIONS = 5
-WEIGHT_CLIP = 0.01
+LAMBDA_GP = 10
 
 transforms = transforms.Compose([
     transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
@@ -43,8 +43,10 @@ critic = Critic(CHANNELS_IMAGE, FEATURES_CRITIC).to(device)
 initialiseWeights(critic)
 initialiseWeights(generator)
 
-optimiserGenerator = optim.RMSprop(generator.parameters(), lr=LEARNING_RATE)
-optimiserCritic = optim.RMSprop(critic.parameters(), lr=LEARNING_RATE)
+optimiserGenerator = optim.Adam(generator.parameters(), lr=LEARNING_RATE,
+                                betas=(0.0, 0.9))
+optimiserCritic = optim.Adam(critic.parameters(), lr=LEARNING_RATE,
+                             betas=(0.0, 0.9))
 
 fixedNoise = torch.randn(32, Z_DIMENTION, 1, 1).to(device)
 
@@ -64,26 +66,27 @@ Training loop
 for epoch in range(N_EPOCH):
     for batchIdx, (realImage, _) in enumerate(loader):
         realImage = realImage.to(device)
+        currBatchSize = realImage.shape[0]
 
         for _ in range(CRITIC_ITERATIONS):
         
             ### Training five times: Critic  {max mean(D(x) - mean D(G(z)))}
-            noise = torch.randn((BATCH_SIZE, Z_DIMENTION, 1, 1)).to(device)
+            noise = torch.randn((currBatchSize, Z_DIMENTION, 1, 1)).to(device)
             fakeImage = generator(noise)
 
             criticReal = critic(realImage).reshape(-1)
             criticFake = critic(fakeImage).reshape(-1)
+            gp = gradientPenalty(critic, realImage,
+                                 fakeImage, device=device)
 
             # We write the loss function ourselves
-            lossCritic = -(torch.mean(criticReal) - torch.mean(criticFake))           
+            lossCritic = (
+                -(torch.mean(criticReal) - torch.mean(criticFake)) + LAMBDA_GP*gp
+            )           
             
             critic.zero_grad()
             lossCritic.backward(retain_graph=True)
             optimiserCritic.step()
-
-            # Clip our weights after every training loop
-            for p in critic.parameters():
-                p.data.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
 
         ### TRAINing GENERATOR      {min D(G(Z))}
         output = critic(fakeImage).reshape(-1)

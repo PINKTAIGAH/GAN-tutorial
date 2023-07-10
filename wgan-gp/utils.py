@@ -1,13 +1,11 @@
 import torch
-import torch.nn as nn
 
-def gradientPenalty(critic, realImage, fakeImage):
+def gradientPenalty(critic, realImage, fakeImage, device=torch.device("cpu") ):
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cuda")
-    BATCH_SIZE, C, H, W = realImage.shape()  # Channel, Hight, Width
+    BATCH_SIZE, C, H, W = realImage.shape  # Channel, Hight, Width
 
     ### Create interpolated images (mix of real and fake with some random weight)
-    epsilon = torch.randn((BATCH_SIZE, 1, 1, 1)).repeat(1, C, H, W).to(device)
+    epsilon = torch.rand((BATCH_SIZE, 1, 1, 1)).repeat(1, C, H, W).to(device)
     interpolatedImages = realImage * epsilon * fakeImage * (1 - epsilon)
 
     ### Calculate critic score

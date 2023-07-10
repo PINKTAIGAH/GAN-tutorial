@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn.modules import padding
 
 """
 Critic model
@@ -32,7 +31,7 @@ class Critic(nn.Module):
         return nn.Sequential(
             nn.Conv2d(inChannels, outChannels, kernalSize, 
                       stride, padding, bias=False),
-            nn.BatchNorm2d(outChannels),
+            nn.InstanceNorm2d(outChannels, affine=True), # Layernorm <--> InstanceNorm
             nn.LeakyReLU(0.2),
         )
 
