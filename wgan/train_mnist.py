@@ -43,12 +43,9 @@ critic = Critic(CHANNELS_IMAGE, FEATURES_CRITIC).to(device)
 initialiseWeights(critic)
 initialiseWeights(generator)
 
-### Betas are obtained form the original DCGAN paper
-optimiserGenerator = optim.Adam(generator.parameters(), lr=LEARNING_RATE,
-                                betas=(0.5, 0.999))
-optimiserCritic = optim.Adam(critic.parameters(), lr=LEARNING_RATE,
-                                betas=(0.5, 0.999))
-criterion = nn.BCELoss()
+optimiserGenerator = optim.RMSprop(generator.parameters(), lr=LEARNING_RATE)
+optimiserCritic = optim.RMSprop(critic.parameters(), lr=LEARNING_RATE)
+
 fixedNoise = torch.randn(32, Z_DIMENTION, 1, 1).to(device)
 
 writerReal = SummaryWriter(f"runs_mnist/real")
@@ -67,27 +64,31 @@ Training loop
 for epoch in range(N_EPOCH):
     for batchIdx, (realImage, _) in enumerate(loader):
         realImage = realImage.to(device)
-        noise = torch.randn((BATCH_SIZE, Z_DIMENTION, 1, 1)).to(device)
-        fakeImage = generator(noise)
+
+        for _ in range(CRITIC_ITERATIONS):
         
-        ### Training Critic  {max log(D(x)) + log(1-D(G(z)))}
-        criticReal = critic(realImage).reshape(-1)
-        criticFake = critic(fakeImage).reshape(-1)
+            ### Training five times: Critic  {max mean(D(x) - mean D(G(z)))}
+            noise = torch.randn((BATCH_SIZE, Z_DIMENTION, 1, 1)).to(device)
+            fakeImage = generator(noise)
 
-        lossCriticReal = criterion(criticReal, 
-                                          torch.ones_like(criticReal))
-        lossCriticFake = criterion(criticFake,
-                                          torch.zeros_like(criticFake))
-        lossCritic = (lossCriticReal + lossCriticFake)/2 
+            criticReal = critic(realImage).reshape(-1)
+            criticFake = critic(fakeImage).reshape(-1)
 
-        critic.zero_grad()
-        lossCritic.backward(retain_graph=True)   # to reuse for generator
-        optimiserCritic.step()
+            # We write the loss function ourselves
+            lossCritic = -(torch.mean(criticReal) - torch.mean(criticFake))           
+            
+            critic.zero_grad()
+            lossCritic.backward(retain_graph=True)
+            optimiserCritic.step()
 
-        ### TRAINing GENERATOR      {max log(D(G(z)))}
+            # Clip our weights after every training loop
+            for p in critic.parameters():
+                p.data.clamp(-WEIGHT_CLIP, WEIGHT_CLIP)
+
+        ### TRAINing GENERATOR      {min D(G(Z))}
         output = critic(fakeImage).reshape(-1)
-        lossGenerator = criterion(output, torch.ones_like(output))
-        
+        lossGenerator = -torch.mean(output)
+
         generator.zero_grad()
         lossGenerator.backward()
         optimiserGenerator.step()
