@@ -16,7 +16,7 @@ class CNNBlock(nn.Module):
             nn.LeakyReLU(0.2),
         )
 
-        def forward(self, x):
+    def forward(self, x):
             return self.convolution(x)
 
 
@@ -26,9 +26,9 @@ Define discriminator class
 
 ### We pass in a concatinated tensor with x and y
 class Discriminator(nn.Module):
-    def __init__(self, inChannel, outChannel, features=[64, 128, 256, 512]):
+    def __init__(self, inChannel=3, features=[64, 128, 256, 512]):
 
-        ### input will be a 256p image and go to 30*30 output
+        ### input will be a 256p image and go to 26*26 output
         super().__init__()
 
         ### No batchnorm in initial convolutional block
@@ -49,6 +49,12 @@ class Discriminator(nn.Module):
             )
             inChannels = feature    # make outchannels inchannels for next layer
 
+        layers.append(
+            ### Make the output a single channel wide that contains prob of result
+            nn.Conv2d(inChannels, 1, kernel_size=4,
+                      stride=1, padding=1, padding_mode="reflect")
+        )
+
         self.model = nn.Sequential(*layers) # unpack all elements of layers list
 
     
@@ -65,8 +71,13 @@ class Discriminator(nn.Module):
 """
 Unit test for discriminator model
 """
+def test():
+    x = torch.randn((1, 3, 256, 256))       # 1 * 3 channels * 256 * 256 pixels
+    y = torch.randn((1, 3, 256, 256))
+    model = Discriminator()
+    predictions = model(x, y)
+    print(predictions.shape)
 
 if __name__ == "__main__":
-    x = torch.randn((1, 3, 256, 256))       # 1 * 3 channels * 256 * 256 pixels
-
+    test()
 
