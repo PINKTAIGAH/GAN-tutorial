@@ -1,5 +1,10 @@
 import torch
 import torch.nn as nn
+"""
+By adding an extra channel in the latend nouse vector and the input image, we 
+are also forcing the model to lkearn what class the input image is and to
+copy that image when trying to generate a replica
+"""
 
 """
 Critic model
@@ -7,11 +12,11 @@ Critic model
 
 class Critic(nn.Module):
 
-    def __init__(self, channelImages, featuresD):
+    def __init__(self, channelImages, featuresD, nClasses, imageSize):
         super(Critic, self).__init__()
         self.critic = nn.Sequential(
-            ### INPUT SIZE: N * channelImages * 64 * 64
-            nn.Conv2d(channelImages, featuresD, kernel_size=4,
+            ### INPUT SIZE: N * channelImages + 1 (embedding) * 64 * 64
+            nn.Conv2d(channelImages+1, featuresD, kernel_size=4,
                       stride=2, padding= 1),
             ### SIZE: 32*32
             nn.LeakyReLU(0.2),
@@ -24,6 +29,8 @@ class Critic(nn.Module):
             nn.Conv2d(featuresD*8, 1, kernel_size=4, stride=2, padding=0),
             ### SIZE: 1*1
         )
+        self.imageSize = imageSize
+        self.embed = nn.Embedding(nClasses, self.imageSize*self.imageSize)
 
     def _block(self, inChannels, outChannels, kernalSize, stride, padding):
         ### This will be internal blocks of layers of the model
@@ -35,7 +42,12 @@ class Critic(nn.Module):
             nn.LeakyReLU(0.2),
         )
 
-    def forward(self, x):
+    def forward(self, x, labels):
+        embedding = self.embed(labels).view(labels.shape[0], 1,
+                                            self.imageSize, self.imageSize)
+        ### Concatinate embedding to the x tensor to include info of img class
+        ### Embedding acts like an additional channel of the image
+        x = torch.cat([x, embedding], dim=1)
         return self.critic(x)
 
 """
@@ -43,11 +55,12 @@ Generator module
 """
 
 class Generator(nn.Module):
-    def __init__(self, zDimention, channelImages, featuresG):
+    def __init__(self, zDimention, channelImages, featuresG,
+                 nClasses, imageSize, embedSize):
         super(Generator, self).__init__()
         self.generator = nn.Sequential(
-            ### INPUT SIZE: N * zDimention * 1 * 1
-            self._block(zDimention, featuresG*16, 4, 1, 0),
+            ### INPUT SIZE: N * zDimention + embed_size * 1 * 1
+            self._block(zDimention + embedSize, featuresG*16, 4, 1, 0),
             ### SIZE: 4*4 
             self._block(featuresG*16, featuresG*8, 4, 2, 1),
             ### SIZE: 8*8
@@ -60,6 +73,9 @@ class Generator(nn.Module):
             ### SIZE: 64*64
             nn.Tanh(),   # We want output to be in range [-1, 1]
         )
+        
+        self.imageSize = imageSize
+        self.embed = nn.Embedding(nClasses, embedSize)
 
     def _block(self, inChannels, outChannels, kernalSize, stride, padding):
         return nn.Sequential(
@@ -69,7 +85,10 @@ class Generator(nn.Module):
             nn.ReLU(),
         )
     
-    def forward(self, x):
+    def forward(self, x, labels):
+        ### latent vector Z: N * noise_dimention * 1 * 1
+        embedding = self.embed(labels).unsqueeze(2).unsqueeze(3) #unsquezze adds 1*1 
+        x = torch.cat([x, embedding], dim=1)
         return self.generator(x)
 
 """
