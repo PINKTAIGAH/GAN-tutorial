@@ -39,8 +39,12 @@ transforms = transforms.Compose([
 dataset = datasets.MNIST(root="../dataset/", train=True, transform= transforms,
                          download=True)
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
-generator = Generator(Z_DIMENTION, CHANNELS_IMAGE, FEATURES_GENERATOR).to(device)
-critic = Critic(CHANNELS_IMAGE, FEATURES_CRITIC).to(device)
+
+generator = Generator(Z_DIMENTION, CHANNELS_IMAGE,
+                      FEATURES_GENERATOR, N_CLASSES,
+                      IMAGE_SIZE, GENERATOR_EMBEDDING).to(device)
+critic = Critic(CHANNELS_IMAGE, FEATURES_CRITIC,
+                N_CLASSES, IMAGE_SIZE).to(device)
 
 initialiseWeights(critic)
 initialiseWeights(generator)
@@ -66,19 +70,20 @@ Training loop
 """
 
 for epoch in range(N_EPOCH):
-    for batchIdx, (realImage, _) in enumerate(loader):
+    for batchIdx, (realImage, labels) in enumerate(loader):
         realImage = realImage.to(device)
+        labels = labels.to(device)
         currBatchSize = realImage.shape[0]
 
         for _ in range(CRITIC_ITERATIONS):
         
             ### Training five times: Critic  {max mean(D(x) - mean D(G(z)))}
             noise = torch.randn((currBatchSize, Z_DIMENTION, 1, 1)).to(device)
-            fakeImage = generator(noise)
+            fakeImage = generator(noise, labels)
 
-            criticReal = critic(realImage).reshape(-1)
-            criticFake = critic(fakeImage).reshape(-1)
-            gp = gradientPenalty(critic, realImage,
+            criticReal = critic(realImage, labels).reshape(-1)
+            criticFake = critic(fakeImage, labels).reshape(-1)
+            gp = gradientPenalty(critic, labels, realImage,
                                  fakeImage, device=device)
 
             # We write the loss function ourselves
@@ -91,7 +96,7 @@ for epoch in range(N_EPOCH):
             optimiserCritic.step()
 
         ### TRAINing GENERATOR      {min D(G(Z))}
-        output = critic(fakeImage).reshape(-1)
+        output = critic(fakeImage, labels).reshape(-1)
         lossGenerator = -torch.mean(output)
 
         generator.zero_grad()
@@ -109,7 +114,7 @@ for epoch in range(N_EPOCH):
             )
 
             with torch.no_grad():
-                fake = generator(fixedNoise)
+                fake = generator(noise, labels)
             
                 ### Take out (up to) 32 examples
                 imageGridReal = torchvision.utils.make_grid(
