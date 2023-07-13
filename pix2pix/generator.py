@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn.modules import activation
 
 """
 Write generic convolution block used for the upscaling and downscaling of the 
@@ -47,9 +46,9 @@ class Generator(nn.Module):
 
         self.down1 = Block(features, features*2, down=True,
                            activation="leaky", useDropout=False)    # 64
-        self.down2 = Block(features*4, features*8, down=True,
+        self.down2 = Block(features*2, features*4, down=True,
                            activation="leaky", useDropout=False)    # 32
-        self.down3 = Block(features*8, features*8, down=True,
+        self.down3 = Block(features*4, features*8, down=True,
                            activation="leaky", useDropout=False)    # 16
         self.down4 = Block(features*8, features*8, down=True,
                            activation="leaky", useDropout=False)    # 8
@@ -109,3 +108,11 @@ class Generator(nn.Module):
         
         return self.finalUp(torch.cat([up7, d1], 1))
         
+def test():
+    x = torch.randn((1, 3, 256, 256))
+    model = Generator(inChannels=3, features=64)
+    predictions = model(x)
+    print(predictions.shape)
+
+if __name__ == "__main__":
+    test()
