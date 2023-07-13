@@ -63,4 +63,49 @@ class Generator(nn.Module):
             nn.Conv2d(features*8, features*8, kernel_size=4, stride=2, 
                       padding=1, padding_mode="reflect"),
             nn.ReLU(),
+        )   # 1*1
+
+        self.up1 = Block(features*8, features*8, down=False,
+                         activation="relu", useDropout=True)
+        ### Input features *2 due to linked therefore gets concatinated w/ down
+        self.up2 = Block(features*8*2, features*8, down=False,
+                         activation="relu", useDropout=True)
+        self.up3 = Block(features*8*2, features*8, down=False,
+                         activation="relu", useDropout=True)
+        self.up4 = Block(features*8*2, features*8, down=False,
+                         activation="relu", useDropout=False)
+        self.up5 = Block(features*8*2, features*4, down=False,
+                         activation="relu", useDropout=False)
+        self.up6 = Block(features*4*2, features*2, down=False,
+                         activation="relu", useDropout=False)
+        self.up7 = Block(features*2*2, features, down=False,
+                         activation="relu", useDropout=False)
+        
+        self.finalUp = nn.Sequential(
+            nn.ConvTranspose2d(features*2, inChannels, kernel_size=4,
+                               stride=2, padding=1),
+            nn.Tanh(),  # Output of generator is in range [-1, 1]
         )
+
+    def forward(self, x):
+        d1 = self.initialDown(x)
+        d2 = self.down1(d1)
+        d3 = self.down2(d2)
+        d4 = self.down3(d3)
+        d5 = self.down4(d4)
+        d6 = self.down5(d5)
+        d7 = self.down6(d6)
+        
+        bottleneck = self.bottleneck(d7)
+
+        ### The concatinations are due to the skip connections in the u-net
+        up1 = self.up1(bottleneck)
+        up2 = self.up2(torch.cat([up1, d7], 1))
+        up3 = self.up3(torch.cat([up2, d6], 1))
+        up4 = self.up4(torch.cat([up3, d5], 1))
+        up5 = self.up5(torch.cat([up4, d4], 1))
+        up6 = self.up6(torch.cat([up5, d3], 1))
+        up7 = self.up7(torch.cat([up6, d2], 1))
+        
+        return self.finalUp(torch.cat([up7, d1], 1))
+        
