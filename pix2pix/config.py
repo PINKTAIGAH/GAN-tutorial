@@ -3,8 +3,8 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
-TRAIN_DIR = "data/train"
-VAL_DIR = "data/val"
+TRAIN_DIR = "/media/giorgio/HDD/GAN/pix2pix/datasets/maps/maps/train/"
+VAL_DIR = "/media/giorgio/HDD/GAN/pix2pix/datasets/maps/maps/val/"
 LEARNING_RATE = 2e-4
 BATCH_SIZE = 16
 N_WORKERS = 2
