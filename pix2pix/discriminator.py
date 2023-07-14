@@ -5,12 +5,12 @@ import torch.nn as nn
 Class containing a single convolutional block for the neural networks
 """
 class CNNBlock(nn.Module):
-    def __init__(self, inClannels, outChannels, stride=2):
+    def __init__(self, inChannels, outChannels, stride=2):
         super().__init__()
         
         self.convolution = nn.Sequential(
             ### Padding mode is set to false to avoid artefacts
-            nn.Conv2d(inClannels, outChannels, kernel_size=4,
+            nn.Conv2d(inChannels, outChannels, kernel_size=4,
                       stride=stride, bias=False, padding_mode="reflect"),
             nn.BatchNorm2d(outChannels),
             nn.LeakyReLU(0.2),
